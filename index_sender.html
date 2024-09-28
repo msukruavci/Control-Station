@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Sender</title>
+</head>
+<body>
+    <video id="localVideo" autoplay playsinline></video>
+
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+
+        const localVideo = document.getElementById('localVideo');
+
+        const constraints = {
+            video: true,
+            audio: false
+        };
+
+        const peerConnection = new RTCPeerConnection();
+
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                localVideo.srcObject = stream;
+                stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+            });
+
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                socket.emit('message', { candidate: event.candidate });
+            }
+        };
+
+        socket.on('message', async message => {
+            if (message.answer) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+            } else if (message.candidate) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+            }
+        });
+
+        const createOffer = async () => {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('message', { offer: offer });
+        };
+
+        createOffer();
+    </script>
+</body>
+</html>
